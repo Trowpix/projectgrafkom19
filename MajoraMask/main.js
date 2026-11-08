@@ -14,7 +14,7 @@ async function main() {
   const character = createMajoraModel();
 
   const friction = .08, keySpeed = .04;
-  let yaw = 0, pitch = 0, distance = 6.5;
+  let yaw = 0, pitch = 0, distance = 8.5;
   let spinX = 0, spinY = 0;
   let drag = null, paused = false, time = 0, last;
   let lost = false;
@@ -73,7 +73,7 @@ async function main() {
       pitch = 0;
       spinX = 0;
       spinY = 0;
-      distance = 6.5;
+      distance = 8.5;
     }
   });
 
