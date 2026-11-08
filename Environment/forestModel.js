@@ -1,145 +1,385 @@
 import { MyObject } from '../deku_scrub/myObject.js';
 import * as G from './forestGeometry.js';
 
-export function createForest() {
-  const root = new MyObject('forest');
+// Membuat permukaan rumput dan lapisan batu di bawah pulau.
+function buatPulau() {
+  const mesh = {
+    vertices: [],
+    normals: [],
+    colors: [],
+    indices: []
+  };
 
-  function add(
-    name,
-    mesh,
-    position = [0, 0, 0],
-    scale = [1, 1, 1],
-    material = { gloss: 0 }
-  ) {
-    const n = root.add(new MyObject(name, mesh, material));
-    n.position = position;
-    n.scale = scale;
-    return n;
+  const jumlahSisi = 48;
+
+  // Titik pada keliling pulau.
+  // Variasi radius membuat bentuknya sedikit tidak beraturan.
+  function titik(i, radiusX, radiusZ, y) {
+    const sudut = i / jumlahSisi * Math.PI * 2;
+
+    const variasi =
+      1 +
+      .035 * Math.sin(sudut * 5) +
+      .025 * Math.cos(sudut * 3);
+
+    return [
+      radiusX * Math.cos(sudut) * variasi,
+      y,
+      radiusZ * Math.sin(sudut) * variasi
+    ];
   }
 
-  add('tanah', G.ground());
+  // Setiap segitiga memiliki normal sendiri.
+  // Hasilnya memberikan tampilan batu yang sedikit bersegi.
+  function segitiga(a, b, c, warna) {
+    const u = b.map((nilai, k) => nilai - a[k]);
+    const v = c.map((nilai, k) => nilai - a[k]);
 
-  add(
-    'jalan-setapak',
-    G.ribbon(
-      z => -.6 + Math.sin(z * .32) * .55,
-      .82,
-      .003,
-      [.47, .41, .23]
-    )
-  );
+    const normal = [
+      u[1] * v[2] - u[2] * v[1],
+      u[2] * v[0] - u[0] * v[2],
+      u[0] * v[1] - u[1] * v[0]
+    ];
 
-  add(
-    'tepi-sungai',
-    G.ribbon(
-      z => 5 + Math.sin(z * .39) * .9,
-      1.05,
-      .007,
-      [.28, .30, .17]
-    )
-  );
+    const panjang = Math.hypot(...normal) || 1;
+    const normalSatuan = normal.map(nilai => nilai / panjang);
 
-  const water = add(
-    'air',
-    G.ribbon(
-      z => 5 + Math.sin(z * .39) * .9,
-      .79,
-      .016,
-      [.17, .48, .43]
-    ),
-    [0, 0, 0],
-    [1, 1, 1],
-    { gloss: .4 }
-  );
+    const awal = mesh.vertices.length / 3;
 
-  // Mesh yang sama dipakai ulang oleh beberapa pohon.
-  const trunkMesh = G.trunk();
-  const crownA = G.ellipsoid(1.35, .90, 1.18, [.16, .34, .11]);
-  const crownB = G.ellipsoid(1.12, .75, 1.05, [.25, .44, .13]);
-
-  function tree(x, z, size = 1) {
-    const t = root.add(new MyObject('pohon'));
-    t.position = [x, 0, z];
-    t.scale = [size, size, size];
-
-    function piece(name, mesh, position) {
-      const n = t.add(new MyObject(name, mesh, { gloss: 0 }));
-      n.position = position;
-      return n;
+    for (const posisi of [a, b, c]) {
+      mesh.vertices.push(...posisi);
+      mesh.normals.push(...normalSatuan);
+      mesh.colors.push(...warna);
     }
 
-    piece('batang', trunkMesh, [0, 0, 0]);
-    piece('tajuk-1', crownA, [0, 3.75, 0]);
-    piece('tajuk-2', crownB, [-.72, 3.39, .24]);
-    piece('tajuk-3', crownB, [.70, 3.55, -.18]);
-
-    const rootMesh = G.ellipsoid(.55, .14, .20, [.25, .15, .06]);
-
-    for (let i = 0; i < 3; i++) {
-      const a = i * 2 * Math.PI / 3;
-      const n = piece(
-        'akar',
-        rootMesh,
-        [Math.cos(a) * .28, .04, Math.sin(a) * .28]
-      );
-      n.rotation[1] = -a;
-    }
+    mesh.indices.push(awal, awal + 1, awal + 2);
   }
 
-  // Area depan-tengah dibiarkan terbuka untuk karakter.
-  [
-    [-8, 5, 1.35],
-    [8, 4, 1.30],
-    [-8, -1, 1.2],
-    [8, -2, 1.15],
-    [-8, -7, 1.1],
-    [-5, -8, 1.28],
-    [-2, -9, 1.1],
-    [1, -9, 1.2],
-    [4, -8, 1.18],
-    [8, -8, 1.3]
-  ].forEach(p => tree(...p));
+  // Setiap lapisan berisi:
+  // [radius X, radius Z, posisi Y, warna RGB].
+  const lapisan = [
+    [9.5, 6.6, -.04, [.34, .49, .17]],
+    [9.5, 6.6, -.30, [.29, .39, .13]],
+    [8.9, 6.1, -.75, [.43, .32, .20]],
+    [7.4, 5.1, -1.85, [.36, .31, .25]],
+    [4.7, 3.3, -3.15, [.30, .32, .30]],
+    [1.8, 1.3, -4.15, [.25, .28, .27]]
+  ];
 
-  const bush = G.ellipsoid(.72, .50, .61, [.28, .46, .12]);
+  // Permukaan atas dibuat datar agar karakter mudah ditempatkan.
+  for (let i = 0; i < jumlahSisi; i++) {
+    const cerah = .97 + .03 * Math.sin(i * 1.7);
 
-  [
-    [-7, 2], [-6, -5], [-3, -6], [2, -6],
-    [8, 1], [8, -4], [-8, -3], [3, -7]
-  ].forEach(([x, z], i) => {
-    add('semak-' + i, bush, [x, .27, z]);
-    add('semak-kecil-' + i, bush, [x + .5, .2, z + .2], [.7, .8, .8]);
-  });
-
-  const rock = G.ellipsoid(.55, .34, .43, [.36, .39, .30]);
-
-  [
-    [3.9, 3], [6, 1], [3.7, -2], [5.5, -5],
-    [-5, 3], [-6, -4], [2.8, -6]
-  ].forEach(([x, z], i) => {
-    const n = add(
-      'batu-' + i,
-      rock,
-      [x, .18, z],
-      [1, .8 + (i % 3) * .15, 1]
+    segitiga(
+      [0, -.04, 0],
+      titik(i + 1, 9.5, 6.6, -.04),
+      titik(i, 9.5, 6.6, -.04),
+      [.34 * cerah, .49 * cerah, .17 * cerah]
     );
-    n.rotation[1] = i * .9;
+  }
+
+  // Menghubungkan lapisan rumput, tanah, dan batu.
+  for (let j = 0; j < lapisan.length - 1; j++) {
+    const atas = lapisan[j];
+    const bawah = lapisan[j + 1];
+
+    for (let i = 0; i < jumlahSisi; i++) {
+      const a = titik(i, atas[0], atas[1], atas[2]);
+      const b = titik(i + 1, atas[0], atas[1], atas[2]);
+
+      const c = titik(
+        i + 1,
+        bawah[0],
+        bawah[1],
+        bawah[2]
+      );
+
+      const d = titik(
+        i,
+        bawah[0],
+        bawah[1],
+        bawah[2]
+      );
+
+      const cerah =
+        .91 + .09 * Math.sin(i * 2.3 + j);
+
+      const warna = bawah[3].map(nilai => nilai * cerah);
+
+      segitiga(a, b, c, warna);
+      segitiga(a, c, d, warna);
+    }
+  }
+
+  // Menutup bagian bawah menjadi ujung yang meruncing.
+  for (let i = 0; i < jumlahSisi; i++) {
+    segitiga(
+      titik(i, 1.8, 1.3, -4.15),
+      titik(i + 1, 1.8, 1.3, -4.15),
+      [.25, -4.95, -.15],
+      [.24, .26, .25]
+    );
+  }
+
+  return mesh;
+}
+
+// Nama fungsi dipertahankan agar cocok dengan main.js.
+export function createForest() {
+  const root = new MyObject('pulau-melayang');
+
+  function tambah(
+    induk,
+    nama,
+    mesh = null,
+    posisi = [0, 0, 0],
+    skala = [1, 1, 1]
+  ) {
+    const node = induk.add(
+      new MyObject(nama, mesh, { gloss: 0 })
+    );
+
+    node.position = [...posisi];
+    node.scale = [...skala];
+
+    return node;
+  }
+
+  tambah(
+    root,
+    'tanah-dan-dasar-pulau',
+    buatPulau()
+  );
+
+  // ==================== POHON ====================
+
+  const batang = G.trunk();
+
+  const daunGelap = G.ellipsoid(
+    1.35, .90, 1.18,
+    [.19, .37, .14]
+  );
+
+  const daunTerang = G.ellipsoid(
+    1.10, .78, 1.02,
+    [.33, .51, .19]
+  );
+
+  const pucukPohon = [];
+
+  // Pohon berada di sisi dan belakang.
+  // Bagian tengah dibiarkan terbuka untuk karakter.
+  const daftarPohon = [
+    [-6.7, -2.7, .88],
+    [-3.6, -4.5, .95],
+    [.5, -4.9, .82],
+    [4.4, -3.8, .96],
+    [7.1, -1.7, .76]
+  ];
+
+  for (const [x, z, ukuran] of daftarPohon) {
+    const pohon = tambah(
+      root,
+      'pohon',
+      null,
+      [x, -.04, z],
+      [ukuran, ukuran, ukuran]
+    );
+
+    tambah(pohon, 'batang', batang);
+
+    const pivotDaun = tambah(
+      pohon,
+      'pivot-daun',
+      null,
+      [0, 3.35, 0]
+    );
+
+    tambah(
+      pivotDaun,
+      'daun-tengah',
+      daunGelap,
+      [0, .30, 0]
+    );
+
+    tambah(
+      pivotDaun,
+      'daun-kiri',
+      daunTerang,
+      [-.72, -.05, .12]
+    );
+
+    tambah(
+      pivotDaun,
+      'daun-kanan',
+      daunTerang,
+      [.72, .10, -.12]
+    );
+
+    pucukPohon.push(pivotDaun);
+  }
+
+  // ==================== BATU ====================
+
+  const batu = G.ellipsoid(
+    1, 1, 1,
+    [.44, .47, .42]
+  );
+
+  const lumut = G.ellipsoid(
+    1, 1, 1,
+    [.34, .44, .19]
+  );
+
+  // Posisi X, posisi Z, ukuran.
+  const daftarBatu = [
+    [-7.1, .5, 1.10],
+    [6.3, 2.5, 1.15],
+    [5.8, -2.0, .90],
+    [-5.0, -3.0, .65],
+    [-6.6, 2.4, .42],
+    [-3.8, 3.9, .32],
+    [.5, 4.5, .48],
+    [4.8, 3.7, .36],
+    [2.3, -3.2, .50]
+  ];
+
+  daftarBatu.forEach(([x, z, ukuran], i) => {
+    const node = tambah(
+      root,
+      'batu-' + i,
+      batu,
+      [x, ukuran * .32 - .04, z],
+      [
+        ukuran,
+        ukuran * .66,
+        ukuran * .78
+      ]
+    );
+
+    node.rotation[1] = i * .8;
+
+    // Tambahkan lumut pada batu besar.
+    if (ukuran > .8) {
+      tambah(
+        root,
+        'lumut-' + i,
+        lumut,
+        [x, ukuran * .91 - .04, z],
+        [
+          ukuran * .68,
+          ukuran * .10,
+          ukuran * .52
+        ]
+      );
+    }
   });
 
-  const flower = G.ellipsoid(.09, .10, .09, [.85, .72, .26]);
+  // ==================== SEMAK ====================
 
-  [
-    [-6, 1], [-5.7, 1.2], [-6.1, .7],
-    [2.4, -5], [2.6, -5.2], [7, 2]
-  ].forEach(([x, z], i) => {
-    add('bunga-' + i, flower, [x, .15, z]);
+  const semak = G.ellipsoid(
+    .72, .47, .60,
+    [.35, .52, .17]
+  );
+
+  const daftarSemak = [
+    [-7.3, -1.2],
+    [-4.5, -3.8],
+    [2.7, -4.0],
+    [7.0, .6],
+    [5.4, 3.0]
+  ];
+
+  daftarSemak.forEach(([x, z], i) => {
+    tambah(
+      root,
+      'semak-' + i,
+      semak,
+      [x, .23, z]
+    );
+
+    tambah(
+      root,
+      'semak-kecil-' + i,
+      semak,
+      [x + .5, .16, z + .15],
+      [.65, .75, .70]
+    );
+  });
+
+  // ==================== BUNGA ====================
+
+  const bunga = G.ellipsoid(
+    .09, .11, .09,
+    [.96, .79, .31]
+  );
+
+  const daftarBunga = [
+    [-6.2, 2.6],
+    [-6.0, 2.9],
+    [-5.8, 2.5],
+    [4.7, 3.2],
+    [4.9, 3.4],
+    [5.1, 3.1]
+  ];
+
+  daftarBunga.forEach(([x, z], i) => {
+    tambah(
+      root,
+      'bunga-' + i,
+      bunga,
+      [x, .08, z]
+    );
+  });
+
+  // =============== BATU MELAYANG ===============
+
+  const batuMelayang = [];
+
+  const daftarBatuMelayang = [
+    [-7.7, -2.0, 2.0, .65],
+    [6.7, -2.6, 1.5, .80],
+    [3.5, -4.7, -.8, .48]
+  ];
+
+  daftarBatuMelayang.forEach(([x, y, z, ukuran], i) => {
+    const node = tambah(
+      root,
+      'batu-melayang-' + i,
+      batu,
+      [x, y, z],
+      [
+        ukuran,
+        ukuran * 1.1,
+        ukuran * .8
+      ]
+    );
+
+    batuMelayang.push({
+      node,
+      y,
+      fase: i * 2.1
+    });
   });
 
   return {
     root,
 
-    update(time) {
-      // Perubahan kilap ringan, bukan simulasi gelombang air.
-      water.material.gloss = .35 + .08 * Math.sin(time * .8);
+    update(waktu) {
+      // Daun pohon bergoyang pelan.
+      pucukPohon.forEach((node, i) => {
+        node.rotation[2] =
+          .018 * Math.sin(waktu * .65 + i * 1.4);
+      });
+
+      // Batu di bawah pulau naik-turun dan berputar perlahan.
+      batuMelayang.forEach(({ node, y, fase }) => {
+        node.position[1] =
+          y + .10 * Math.sin(waktu * .75 + fase);
+
+        node.rotation[1] =
+          waktu * .06 + fase;
+      });
     },
 
     draw(renderer) {

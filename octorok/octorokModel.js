@@ -196,57 +196,81 @@ export function createOctorokModel({
     joints,
 
     update(time, mode = 'idle') {
-      const rest = mode === 'rest';
-      const t = time * (mode === 'walk' ? 1.25 : 1);
+  const rest = mode === 'rest';
 
-      // Badan bergerak sangat sedikit.
-      rig.position[1] = rest
-        ? 0
-        : .012 * (1 + Math.sin(t * 1.15));
+  // Waktu dalam detik.
+  const t = time * (mode === 'walk' ? 1.35 : 1);
 
-      rig.rotation[2] = rest
-        ? 0
-        : .012 * Math.sin(t * .75);
+  // Badan naik-turun dan bergoyang.
+  rig.position[1] = rest
+    ? 0
+    : .045 * Math.sin(t * 1.8);
 
-      head.rotation[1] = rest
-        ? 0
-        : .035 * Math.sin(t * .65);
+  rig.rotation[2] = rest
+    ? 0
+    : .035 * Math.sin(t * 1.2);
 
-      head.rotation[0] = rest
-        ? 0
-        : .015 * Math.sin(t * .9);
+  rig.rotation[0] = rest
+    ? 0
+    : .025 * Math.sin(t * 1.5);
 
-      // Gerakan mengisap udara.
-      const breath = rest ? 0 : Math.sin(t * 1.35);
+  // Kepala menoleh dan sedikit mengangguk.
+  head.rotation[1] = rest
+    ? 0
+    : .085 * Math.sin(t * .9);
 
-      // Moncong maju-mundur mengikuti napas.
-      mouth.position[2] = .47 + .055 * breath;  
+  head.rotation[0] = rest
+    ? 0
+    : .045 * Math.sin(t * 1.8 + .5);
 
-      // Sedikit perubahan bukaan mulut.
-      mouth.scale[0] = 1 - .018 * breath;
-      mouth.scale[1] = 1 - .018 * breath;
+  // Mulut maju-mundur seperti mengisap udara.
+  const napas = rest ? 0 : Math.sin(t * 2.1);
 
-      for (const tentacle of tentacles) {
-        tentacle.joints.forEach((joint, j) => {
-          const seed = tentacle.seed + j * 1.83;
+  mouth.position[2] = .47 + .065 * napas;
 
-          // Joint pangkal paling tenang.
-          // Pangkal tenang, bagian tengah dan ujung lebih lentur.
-          const amplitude = [.07, .14, .22][j];
+  // Bukaan mulut berubah sedikit saat bernapas.
+  mouth.scale[0] = 1 - .045 * napas;
+  mouth.scale[1] = 1 - .045 * napas;
 
-          joint.rotation[0] = rest ? 0
-            : amplitude * gentleMotion(t, seed);
+  // Setiap tentakel memiliki fase dan kecepatan berbeda.
+  tentacles.forEach((tentacle, i) => {
+    const fase = tentacle.seed;
+    const kecepatan = 1.4 + (i % 3) * .15;
 
-          joint.rotation[1] = rest ? 0
-            : amplitude * .65 * gentleMotion(t, seed + 5.2);
+    tentacle.joints.forEach((joint, j) => {
+      // Gerakan semakin besar menuju ujung.
+      const amplitudo = [.12, .24, .36][j];
 
-          joint.rotation[2] = rest ? 0
-            : amplitude * .45 * gentleMotion(t, seed + 9.4);
-        });
+      // Jeda antarjoint menghasilkan gerakan bergelombang.
+      const gelombang =
+        t * kecepatan + fase - j * .75;
 
-        tentacle.skin.deform(tentacle.joints);
+      if (rest) {
+        joint.rotation[0] = 0;
+        joint.rotation[1] = 0;
+        joint.rotation[2] = 0;
+        return;
       }
-    },
+
+      // Menekuk ke atas dan bawah.
+      joint.rotation[0] = amplitudo * (
+        .75 * Math.sin(gelombang) +
+        .25 * Math.sin(t * 2.3 + fase + j)
+      );
+
+      // Mengayun ke samping.
+      joint.rotation[1] = amplitudo * .65 *
+        Math.sin(t * 1.05 + fase * 1.7 - j * .6);
+
+      // Sedikit gerakan menyamping tambahan.
+      joint.rotation[2] = amplitudo * .40 *
+        Math.sin(t * 1.7 + fase * .8 - j * .9);
+    });
+
+    // Perbarui bentuk tentakel mengikuti ketiga joint.
+    tentacle.skin.deform(tentacle.joints);
+  });
+},
 
     draw(renderer, parentMatrix) {
       root.draw(renderer, parentMatrix);
