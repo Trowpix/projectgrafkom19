@@ -85,11 +85,40 @@ export function createMajoraModel({ position = [0, 0, 0] } = {}) {
   };
 }
 
-// Animasi melayang halus khas Majora's Mask.
-function poseMajora(j, t, mode) {
-  const rest = mode === 'rest';
+// Durasi tiap tahap animasi, dalam detik.
+const idleTime = 5, riseTime = .4, spinTime = 1.5, fallTime = .6;
+const trickTime = riseTime + spinTime + fallTime;
+const jumpHeight = .6, spinTurns = 3;
 
-  j.rig.position[1] = rest ? 0 : .12 * Math.sin(t * 2.5);
-  j.rig.rotation[1] = rest ? 0 : .10 * Math.cos(t * 1.5);
-  j.rig.rotation[2] = rest ? 0 : .06 * Math.sin(t * 1.8);
+const clamp = k => Math.min(1, Math.max(0, k));
+const easeOut = k => 1 - (1 - clamp(k)) ** 3;
+const smooth = k => clamp(k) ** 2 * (3 - 2 * clamp(k));
+
+// Animasi melayang halus khas Majora's Mask.
+function idlePose(t) {
+  return [.12 * Math.sin(t * 2.5), .10 * Math.cos(t * 1.5), .06 * Math.sin(t * 1.8)];
+}
+
+function poseMajora(j, t, mode) {
+  if (mode === 'rest') {
+    j.rig.position[1] = j.rig.rotation[1] = j.rig.rotation[2] = 0;
+    return;
+  }
+
+  const cycle = t % (idleTime + trickTime);
+  let pose = idlePose(cycle), lift = 0, spin = 0;
+
+  if (cycle >= idleTime) {
+    const k = cycle - idleTime;
+    const end = idlePose(0), blend = smooth(k / trickTime);
+
+    // Pose idle berpindah ke awal siklus agar idle berikutnya tersambung.
+    pose = idlePose(idleTime).map((value, i) => value + (end[i] - value) * blend);
+    lift = jumpHeight * easeOut(k / riseTime) * (1 - smooth((k - riseTime - spinTime) / fallTime));
+    spin = spinTurns * 2 * Math.PI * smooth((k - riseTime) / spinTime);
+  }
+
+  j.rig.position[1] = pose[0] + lift;
+  j.rig.rotation[1] = pose[1];
+  j.rig.rotation[2] = pose[2] + spin;
 }
