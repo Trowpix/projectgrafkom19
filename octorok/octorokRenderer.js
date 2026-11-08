@@ -210,6 +210,34 @@ export function createDekuRenderer(gl) {
         buffers.indexBuffer
       );
 
+      // Unggah ulang posisi dan normal untuk mesh yang dideformasi.
+       // Tentakel berubah bentuk setiap frame.
+// Kirim ulang posisi, normal, dan warna ke GPU.
+        if (mesh.dynamic) {
+          const requiredLength = mesh.vertices.length * 3;
+
+          if (
+            !mesh.uploadData ||
+            mesh.uploadData.length !== requiredLength
+          ) {
+            mesh.uploadData = new Float32Array(requiredLength);
+          }
+
+          const values = mesh.uploadData;
+
+          for (let i = 0; i < mesh.vertices.length; i += 3) {
+            const offset = i * 3;
+
+            for (let k = 0; k < 3; k++) {
+              values[offset + k] = mesh.vertices[i + k];
+              values[offset + 3 + k] = mesh.normals[i + k];
+              values[offset + 6 + k] = mesh.colors[i + k];
+            }
+          }
+
+          gl.bufferSubData(gl.ARRAY_BUFFER, 0, values);
+        }
+
       attributes.forEach((location, i) => {
         gl.enableVertexAttribArray(location);
         gl.vertexAttribPointer(
@@ -247,6 +275,8 @@ export function createDekuRenderer(gl) {
         gl.UNSIGNED_SHORT,
         0
       );
+
+      
     },
 
     dispose() {

@@ -19,5 +19,6 @@ export {
 
 export {
   generateOctorok_Tentacle,
-  generateOctorok_Tip
+  generateOctorok_Tip,
+  setupTentacleSkin
 } from './octorok_tentacles.js';

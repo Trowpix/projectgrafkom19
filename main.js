@@ -1,41 +1,55 @@
-import { LIBS } from './libs.js';
-import { createOctorokModel } from './octorokModel.js';
-import { createDekuRenderer as createOctorokRenderer } from './octorokRenderer.js';
+import { LIBS } from './deku_scrub/libs.js';
+import { createDekuRenderer } from './octorok/octorokRenderer.js';
+import { createForest } from './Environment/forestModel.js';
+import { createSceneCharacters } from './sceneCharacters.js';
 
-function main() {
-  const canvas = document.querySelector('#octorok');
-  const gl = canvas.getContext('webgl', { antialias: true, alpha: true });
+async function main() {
+  const canvas = document.querySelector('#scene');
+  const gl = canvas.getContext('webgl', { antialias: true });
+
   if (!gl) throw new Error('WebGL tidak tersedia.');
 
-  const renderer = createOctorokRenderer(gl);
-  const character = createOctorokModel();
+  const renderer = createDekuRenderer(gl);
+  const forest = createForest();
+  const characters = await createSceneCharacters();
 
-  let yaw = .23, pitch = .10, zoom = 1;
-  let drag = null, paused = false, active = false, time = 0, last;
+  let yaw = .12, pitch = .34, zoom = 1;
+  let drag = null, paused = false, time = 0, last;
 
   canvas.addEventListener('pointerdown', e => {
-    drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    drag = {
+      id: e.pointerId,
+      x: e.clientX,
+      y: e.clientY
+    };
     canvas.setPointerCapture(e.pointerId);
   });
 
   canvas.addEventListener('pointermove', e => {
     if (drag?.id !== e.pointerId) return;
 
-    yaw -= (e.clientX - drag.x) * .008;
-    pitch = Math.max(-.7, Math.min(1.2, pitch + (e.clientY - drag.y) * .008));
+    yaw -= (e.clientX - drag.x) * .006;
+    pitch = Math.max(
+      .10,
+      Math.min(.95, pitch + (e.clientY - drag.y) * .006)
+    );
+
     drag.x = e.clientX;
     drag.y = e.clientY;
   });
 
-  for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-    canvas.addEventListener(name, e => {
+  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    canvas.addEventListener(event, e => {
       if (drag?.id === e.pointerId) drag = null;
     });
   }
 
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
-    zoom = Math.max(.55, Math.min(2.2, zoom * Math.exp(e.deltaY * .001)));
+    zoom = Math.max(
+      .72,
+      Math.min(1.55, zoom * Math.exp(e.deltaY * .001))
+    );
   }, { passive: false });
 
   window.addEventListener('keydown', e => {
@@ -46,11 +60,9 @@ function main() {
       paused = !paused;
     }
 
-    if (e.code === 'KeyW') active = !active;
-
     if (e.code === 'KeyR') {
-      yaw = .23;
-      pitch = .10;
+      yaw = .12;
+      pitch = .34;
       zoom = 1;
     }
   });
@@ -72,25 +84,36 @@ function main() {
 
     const aspect = w / h;
     const fov = Math.PI / 4;
-    const distance = Math.max(5.6, 1.9 / (Math.tan(fov / 2) * aspect)) * zoom;
+    const distance = Math.max(
+      19,
+      8.2 / (Math.tan(fov / 2) * aspect)
+    ) * zoom;
+
+    const target = [-.6, 1.7, -1.7];
+
     const eye = [
-      distance * Math.sin(yaw) * Math.cos(pitch),
-      1.48 + distance * Math.sin(pitch),
-      distance * Math.cos(yaw) * Math.cos(pitch)
+      target[0] + distance * Math.sin(yaw) * Math.cos(pitch),
+      target[1] + distance * Math.sin(pitch),
+      target[2] + distance * Math.cos(yaw) * Math.cos(pitch)
     ];
 
     gl.viewport(0, 0, w, h);
-    gl.clearColor(0, 0, 0, 0);
+    gl.clearColor(.40, .56, .42, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     renderer.beginFrame({
-      view: LIBS.lookAt(eye, [0, 1.48, 0]),
-      projection: LIBS.perspective(fov, aspect, .1, Math.max(100, distance * 2)),
+      view: LIBS.lookAt(eye, target),
+      projection: LIBS.perspective(fov, aspect, .1, 150),
       eye
     });
 
-    character.update(time, active ? 'walk' : 'idle');
-    character.draw(renderer);
+    forest.update(time);
+    forest.draw(renderer);
+
+    for (const model of characters) {
+      model.update(time, 'idle');
+      model.draw(renderer);
+    }
 
     requestAnimationFrame(frame);
   }
@@ -98,8 +121,4 @@ function main() {
   requestAnimationFrame(frame);
 }
 
-try {
-  main();
-} catch (err) {
-  console.error('[Octorok] Gagal memulai:', err);
-}
+main().catch(e => console.error('[Scene hutan]', e));
