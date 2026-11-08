@@ -45,19 +45,110 @@ export function ellipsoid(rx, ry, rz, color) {
   ]);
 }
 
+// Batang ramping yang sedikit melengkung, setinggi 6.2 satuan.
 export function trunk() {
-  return grid(8, 16, (v, u) => {
+  const lengkung = v => .55 * Math.sin(v * 1.9);
+
+  return grid(14, 12, (v, u) => {
     const a = u * 2 * Math.PI;
-    const r = .30 * (1 - .38 * v);
-    return [r * Math.cos(a), v * 3.8, r * Math.sin(a)];
+
+    // Pangkal batang melebar seperti akar.
+    const r = .20 + .16 * (1 - v) ** 5 - .08 * v;
+
+    return [
+      lengkung(v) + r * Math.cos(a),
+      v * 6.2,
+      r * Math.sin(a)
+    ];
   }, (_, v, u) => {
     const shade = .84 + .16 * Math.sin(u * Math.PI * 12);
     return [
-      (.28 + .04 * v) * shade,
-      (.16 + .02 * v) * shade,
-      .065 * shade
+      (.42 + .06 * v) * shade,
+      (.33 + .05 * v) * shade,
+      .22 * shade
     ];
-  }, ([x, , z]) => [x, .009, z]);
+  }, ([x, , z], v) => [x - lengkung(v), .06, z]);
+}
+
+// Ellipsoid bergelombang untuk daun, batu, dan awan.
+// Bagian bawah lebih gelap agar terlihat bervolume.
+export function gumpalan(rx, ry, rz, warnaAtas, warnaBawah, seed = 0) {
+  return grid(12, 18, (v, u) => {
+    const a = (v - .5) * Math.PI;
+    const b = u * 2 * Math.PI;
+
+    const benjol =
+      1 +
+      .10 * Math.sin(b * 4 + seed) * Math.cos(a * 3 + seed) +
+      .05 * Math.sin(b * 9 + seed * 2);
+
+    return [
+      rx * benjol * Math.cos(a) * Math.cos(b),
+      ry * benjol * Math.sin(a),
+      rz * benjol * Math.cos(a) * Math.sin(b)
+    ];
+  }, (_, v) => {
+    const t = Math.min(1, v * 1.6);
+
+    return warnaBawah.map(
+      (nilai, i) => nilai + (warnaAtas[i] - nilai) * t
+    );
+  }, ([x, y, z]) => [
+    x / rx ** 2, y / ry ** 2, z / rz ** 2
+  ]);
+}
+
+// Balok untuk reruntuhan; pusat alasnya berada di y = 0.
+export function balok(lebar, tinggi, tebal, warna) {
+  const x = lebar / 2;
+  const z = tebal / 2;
+
+  const sisi = [
+    [[-x, 0, z], [x, 0, z], [x, tinggi, z], [-x, tinggi, z], [0, 0, 1]],
+    [[x, 0, -z], [-x, 0, -z], [-x, tinggi, -z], [x, tinggi, -z], [0, 0, -1]],
+    [[x, 0, z], [x, 0, -z], [x, tinggi, -z], [x, tinggi, z], [1, 0, 0]],
+    [[-x, 0, -z], [-x, 0, z], [-x, tinggi, z], [-x, tinggi, -z], [-1, 0, 0]],
+    [[-x, tinggi, z], [x, tinggi, z], [x, tinggi, -z], [-x, tinggi, -z], [0, 1, 0]]
+  ];
+
+  const mesh = { vertices: [], normals: [], colors: [], indices: [] };
+
+  sisi.forEach(([a, b, c, d, normal], i) => {
+    for (const p of [a, b, c, d]) {
+      mesh.vertices.push(...p);
+      mesh.normals.push(...normal);
+      mesh.colors.push(...warna);
+    }
+
+    const k = i * 4;
+    mesh.indices.push(k, k + 1, k + 2, k, k + 2, k + 3);
+  });
+
+  return mesh;
+}
+
+// Menggabungkan beberapa mesh agar jumlah draw call tetap sedikit.
+// Bagian: { mesh, posisi, skala }.
+export function gabung(bagian) {
+  const hasil = { vertices: [], normals: [], colors: [], indices: [] };
+
+  for (const { mesh, posisi = [0, 0, 0], skala = [1, 1, 1] } of bagian) {
+    const awal = hasil.vertices.length / 3;
+
+    for (let i = 0; i < mesh.vertices.length; i += 3) {
+      for (let k = 0; k < 3; k++) {
+        hasil.vertices.push(mesh.vertices[i + k] * skala[k] + posisi[k]);
+        hasil.normals.push(mesh.normals[i + k] / skala[k]);
+        hasil.colors.push(mesh.colors[i + k]);
+      }
+    }
+
+    for (const indeks of mesh.indices) {
+      hasil.indices.push(indeks + awal);
+    }
+  }
+
+  return hasil;
 }
 
 // Pita memanjang untuk jalan dan sungai.

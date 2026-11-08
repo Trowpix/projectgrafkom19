@@ -35,12 +35,18 @@ varying vec3 vPosition;
 uniform vec3 uEye;
 uniform float uGloss;
 uniform float uEmission;
+uniform float uClipGround;
 
 void main() {
+  // Hanya aktif pada bagian tubuh Deku.
+  // Sembunyikan permukaan yang berada di bawah tanah.
+  if (uClipGround > 0.5 && vPosition.y < -0.035) {
+    discard;
+  }
+
   vec3 viewDirection = normalize(uEye - vPosition);
   vec3 normal = normalize(vNormal);
 
-  // Permukaan tipis dapat dilihat dari dua sisi.
   if (dot(normal, viewDirection) < 0.0) {
     normal = -normal;
   }
@@ -79,6 +85,7 @@ void main() {
 }
 `;
 
+// Nama ekspor dipertahankan agar sesuai dengan main.js.
 export function createDekuRenderer(gl) {
   function compileShader(type, source) {
     const shader = gl.createShader(type);
@@ -87,19 +94,22 @@ export function createDekuRenderer(gl) {
     gl.compileShader(shader);
 
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-      const message = gl.getShaderInfoLog(shader);
+      const pesan = gl.getShaderInfoLog(shader);
+
       gl.deleteShader(shader);
-      throw new Error(message);
+      throw new Error(pesan);
     }
 
     return shader;
   }
 
   const program = gl.createProgram();
+
   const vertexShader = compileShader(
     gl.VERTEX_SHADER,
     vertexShaderSource
   );
+
   const fragmentShader = compileShader(
     gl.FRAGMENT_SHADER,
     fragmentShaderSource
@@ -113,14 +123,18 @@ export function createDekuRenderer(gl) {
   gl.deleteShader(fragmentShader);
 
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    throw new Error(gl.getProgramInfoLog(program));
+    throw new Error(
+      gl.getProgramInfoLog(program)
+    );
   }
 
   const attributes = [
     'aPosition',
     'aNormal',
     'aColor'
-  ].map(name => gl.getAttribLocation(program, name));
+  ].map(nama => {
+    return gl.getAttribLocation(program, nama);
+  });
 
   const uniforms = Object.fromEntries(
     [
@@ -130,14 +144,14 @@ export function createDekuRenderer(gl) {
       'Normal',
       'Eye',
       'Gloss',
-      'Emission'
-    ].map(name => [
-      name,
-      gl.getUniformLocation(program, 'u' + name)
+      'Emission',
+      'ClipGround'
+    ].map(nama => [
+      nama,
+      gl.getUniformLocation(program, 'u' + nama)
     ])
   );
 
-  // Satu mesh hanya diunggah ke GPU sekali.
   const cache = new Map();
 
   function createBuffer(target, data) {
@@ -149,52 +163,65 @@ export function createDekuRenderer(gl) {
     return buffer;
   }
 
+  // Setiap vertex memiliki sembilan nilai:
+  // posisi XYZ, normal XYZ, warna RGB.
+  function isiData(mesh, values) {
+    for (let i = 0; i < mesh.vertices.length; i += 3) {
+      const offset = i * 3;
+
+      for (let k = 0; k < 3; k++) {
+        values[offset + k] = mesh.vertices[i + k];
+
+        values[offset + 3 + k] =
+          mesh.normals[i + k];
+
+        values[offset + 6 + k] =
+          mesh.colors[i + k];
+      }
+    }
+  }
+
   return {
     beginFrame({ view, projection, eye }) {
       gl.useProgram(program);
+
       gl.enable(gl.DEPTH_TEST);
       gl.disable(gl.CULL_FACE);
 
-      gl.uniformMatrix4fv(uniforms.View, false, view);
+      gl.uniformMatrix4fv(
+        uniforms.View,
+        false,
+        view
+      );
+
       gl.uniformMatrix4fv(
         uniforms.Projection,
         false,
         projection
       );
+
       gl.uniform3fv(uniforms.Eye, eye);
     },
 
     drawMesh(mesh, world, material = {}) {
       if (!cache.has(mesh)) {
-        // Setiap vertex: posisi XYZ, normal XYZ, dan warna RGB.
         const values = new Float32Array(
           mesh.vertices.length * 3
         );
 
-        for (let i = 0; i < mesh.vertices.length; i += 3) {
-          values.set(
-            mesh.vertices.slice(i, i + 3),
-            i * 3
-          );
-          values.set(
-            mesh.normals.slice(i, i + 3),
-            i * 3 + 3
-          );
-          values.set(
-            mesh.colors.slice(i, i + 3),
-            i * 3 + 6
-          );
-        }
+        isiData(mesh, values);
 
         cache.set(mesh, {
           vertexBuffer: createBuffer(
             gl.ARRAY_BUFFER,
             values
           ),
+
           indexBuffer: createBuffer(
             gl.ELEMENT_ARRAY_BUFFER,
             new Uint16Array(mesh.indices)
           ),
+
           count: mesh.indices.length
         });
       }
@@ -205,41 +232,37 @@ export function createDekuRenderer(gl) {
         gl.ARRAY_BUFFER,
         buffers.vertexBuffer
       );
+
       gl.bindBuffer(
         gl.ELEMENT_ARRAY_BUFFER,
         buffers.indexBuffer
       );
 
-      // Unggah ulang posisi dan normal untuk mesh yang dideformasi.
-       // Tentakel berubah bentuk setiap frame.
-// Kirim ulang posisi, normal, dan warna ke GPU.
-        if (mesh.dynamic) {
-          const requiredLength = mesh.vertices.length * 3;
+      // Perbarui data mesh yang berubah bentuk.
+      if (mesh.dynamic) {
+        const jumlahData = mesh.vertices.length * 3;
 
-          if (
-            !mesh.uploadData ||
-            mesh.uploadData.length !== requiredLength
-          ) {
-            mesh.uploadData = new Float32Array(requiredLength);
-          }
-
-          const values = mesh.uploadData;
-
-          for (let i = 0; i < mesh.vertices.length; i += 3) {
-            const offset = i * 3;
-
-            for (let k = 0; k < 3; k++) {
-              values[offset + k] = mesh.vertices[i + k];
-              values[offset + 3 + k] = mesh.normals[i + k];
-              values[offset + 6 + k] = mesh.colors[i + k];
-            }
-          }
-
-          gl.bufferSubData(gl.ARRAY_BUFFER, 0, values);
+        if (
+          !mesh.uploadData ||
+          mesh.uploadData.length !== jumlahData
+        ) {
+          mesh.uploadData = new Float32Array(
+            jumlahData
+          );
         }
+
+        isiData(mesh, mesh.uploadData);
+
+        gl.bufferSubData(
+          gl.ARRAY_BUFFER,
+          0,
+          mesh.uploadData
+        );
+      }
 
       attributes.forEach((location, i) => {
         gl.enableVertexAttribArray(location);
+
         gl.vertexAttribPointer(
           location,
           3,
@@ -255,18 +278,26 @@ export function createDekuRenderer(gl) {
         false,
         world
       );
+
       gl.uniformMatrix3fv(
         uniforms.Normal,
         false,
         LIBS.normalMatrix(world)
       );
+
       gl.uniform1f(
         uniforms.Gloss,
         material.gloss ?? .15
       );
+
       gl.uniform1f(
         uniforms.Emission,
         material.emission ?? 0
+      );
+
+      gl.uniform1f(
+        uniforms.ClipGround,
+        material.clipGround ? 1 : 0
       );
 
       gl.drawElements(
@@ -275,8 +306,6 @@ export function createDekuRenderer(gl) {
         gl.UNSIGNED_SHORT,
         0
       );
-
-      
     },
 
     dispose() {

@@ -17,6 +17,11 @@ function add(
   return node;
 }
 
+function gerakHalus(nilai) {
+  const x = Math.max(0, Math.min(1, nilai));
+  return x * x * (3 - 2 * x);
+}
+
 // Gerakan halus dengan kombinasi dua gelombang.
 // Fase berbeda memberi variasi pada tiap tentakel dan joint.
 function gentleMotion(time, seed) {
@@ -195,8 +200,10 @@ export function createOctorokModel({
     root,
     joints,
 
-    update(time, mode = 'idle') {
+    // kembang: 0 sampai 1, tentakel terbuka saat melompat.
+    update(time, mode = 'idle', { kembang = 0 } = {}) {
   const rest = mode === 'rest';
+  const idle = mode === 'idle';
 
   // Waktu dalam detik.
   const t = time * (mode === 'walk' ? 1.35 : 1);
@@ -214,23 +221,55 @@ export function createOctorokModel({
     ? 0
     : .025 * Math.sin(t * 1.5);
 
+  // ROTASI: badan berayun, lalu berputar penuh setiap 10 detik.
+  const putar = idle ? gerakHalus((t % 10 - 6) / 2) : 0;
+
+  rig.rotation[1] = idle
+    ? .32 * Math.sin(t * .8) + putar * 2 * Math.PI
+    : 0;
+
+  // SCALING: badan memipih dan memanjang seperti bernapas.
+  const denyutBadan = idle ? .07 * Math.sin(t * 2.6) : 0;
+
+  rig.scale = [
+    1 + denyutBadan,
+    1 - denyutBadan,
+    1 + denyutBadan
+  ];
+
   // Kepala menoleh dan sedikit mengangguk.
   head.rotation[1] = rest
     ? 0
-    : .085 * Math.sin(t * .9);
+    : (idle ? .28 : .085) * Math.sin(t * .9);
 
   head.rotation[0] = rest
     ? 0
     : .045 * Math.sin(t * 1.8 + .5);
 
+  // SCALING: setiap 5 detik mengisap udara lalu menyemburkannya.
+  const siklus = idle ? t % 5 : 0;
+  const hirup = idle ? gerakHalus(siklus / 3.2) : 0;
+  const lepas = idle ? gerakHalus((siklus - 3.2) / .35) : 0;
+
+  const kembung = hirup * (1 - lepas);
+  const ukuranKepala = 1 + .26 * kembung;
+
+  head.scale = [ukuranKepala, ukuranKepala, ukuranKepala];
+
+  const semburan = idle
+    ? Math.exp(-(((siklus - 3.5) / .22) ** 2))
+    : 0;
+
   // Mulut maju-mundur seperti mengisap udara.
   const napas = rest ? 0 : Math.sin(t * 2.1);
 
-  mouth.position[2] = .47 + .065 * napas;
+  mouth.position[2] = .47 + .065 * napas + .18 * semburan;
 
-  // Bukaan mulut berubah sedikit saat bernapas.
-  mouth.scale[0] = 1 - .045 * napas;
-  mouth.scale[1] = 1 - .045 * napas;
+  // Bukaan mulut membesar saat menyembur.
+  const bukaMulut = 1 - .045 * napas + .55 * semburan - .18 * kembung;
+
+  mouth.scale[0] = bukaMulut;
+  mouth.scale[1] = bukaMulut;
 
   // Setiap tentakel memiliki fase dan kecepatan berbeda.
   tentacles.forEach((tentacle, i) => {
@@ -256,7 +295,7 @@ export function createOctorokModel({
       joint.rotation[0] = amplitudo * (
         .75 * Math.sin(gelombang) +
         .25 * Math.sin(t * 2.3 + fase + j)
-      );
+      ) - kembang * [.75, .55, .45][j];
 
       // Mengayun ke samping.
       joint.rotation[1] = amplitudo * .65 *

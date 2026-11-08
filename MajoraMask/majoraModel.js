@@ -60,6 +60,10 @@ export function createMajoraModel({ position = [0, 0, 0] } = {}) {
       );
 
       spike.rotation = Parts.aimRotation([-dx, -dy, 0]);
+
+      // Disimpan agar duri memanjang dari pangkalnya.
+      spike.base = offset([side * base[0], base[1], 0]);
+      spike.direction = [dx, dy, 0];
       spikes.push(spike);
     }
   }
@@ -95,30 +99,76 @@ const easeOut = k => 1 - (1 - clamp(k)) ** 3;
 const smooth = k => clamp(k) ** 2 * (3 - 2 * clamp(k));
 
 // Animasi melayang halus khas Majora's Mask.
+// Hasil: [naik-turun, putaran Y, putaran Z].
 function idlePose(t) {
-  return [.12 * Math.sin(t * 2.5), .10 * Math.cos(t * 1.5), .06 * Math.sin(t * 1.8)];
+  return [.16 * Math.sin(t * 2.5), .50 * Math.sin(t * .9), .12 * Math.sin(t * 1.8)];
+}
+
+// Detak ganda seperti jantung, satu siklus setiap 1.4 detik.
+function heartbeat(t) {
+  const k = t % 1.4;
+  const beat = (center, width) => Math.exp(-(((k - center) / width) ** 2));
+
+  return beat(.18, .09) + .65 * beat(.48, .10);
 }
 
 function poseMajora(j, t, mode) {
   if (mode === 'rest') {
     j.rig.position[1] = j.rig.rotation[1] = j.rig.rotation[2] = 0;
+    j.rig.scale = [1, 1, 1];
+    j.eyes.forEach(eye => { eye.scale = [1, 1, 1]; });
+    j.spikes.forEach(spike => stretchSpike(spike, 1));
     return;
   }
 
+  const flying = mode === 'terbang';
   const cycle = t % (idleTime + trickTime);
-  let pose = idlePose(cycle), lift = 0, spin = 0;
 
-  if (cycle >= idleTime) {
+  // Mode 'melayang' sama seperti idle, tetapi tanpa putaran cepat.
+  const trick = mode === 'idle' && cycle >= idleTime;
+
+  let pose = idlePose(t), lift = 0, spin = 0, pop = 0;
+
+  if (flying) {
+    pose = [.20 * Math.sin(t * 5), .14 * Math.sin(t * 2.6), .10 * Math.sin(t * 3.2)];
+  }
+
+  if (trick) {
     const k = cycle - idleTime;
-    const end = idlePose(0), blend = smooth(k / trickTime);
+    const start = idlePose(idleTime + t - cycle);
+    const end = idlePose(t - cycle + idleTime + trickTime);
+    const blend = smooth(k / trickTime);
 
     // Pose idle berpindah ke awal siklus agar idle berikutnya tersambung.
-    pose = idlePose(idleTime).map((value, i) => value + (end[i] - value) * blend);
+    pose = start.map((value, i) => value + (end[i] - value) * blend);
     lift = jumpHeight * easeOut(k / riseTime) * (1 - smooth((k - riseTime - spinTime) / fallTime));
     spin = spinTurns * 2 * Math.PI * smooth((k - riseTime) / spinTime);
+
+    // Topeng membesar selama berputar, lalu kembali normal.
+    pop = smooth(k / riseTime) * (1 - smooth((k - riseTime - spinTime) / fallTime));
   }
 
   j.rig.position[1] = pose[0] + lift;
   j.rig.rotation[1] = pose[1];
   j.rig.rotation[2] = pose[2] + spin;
+
+  // Scaling: berdetak seperti jantung dan membesar saat berputar.
+  const beat = heartbeat(t * (flying ? 1.5 : 1));
+  const size = 1 + .11 * beat + .34 * pop;
+
+  j.rig.scale = [size, size, size];
+
+  const eyeSize = 1 + .22 * beat;
+
+  j.eyes.forEach(eye => { eye.scale = [eyeSize, eyeSize, eyeSize]; });
+
+  j.spikes.forEach((spike, i) => {
+    stretchSpike(spike, 1 + .24 * Math.sin(t * 2.4 + i * .7) + .32 * pop);
+  });
+}
+
+// Pusat duri berada di ujung, jadi posisinya ikut digeser.
+function stretchSpike(spike, length) {
+  spike.scale = [1, 1, length];
+  spike.position = spike.base.map((value, i) => value + spike.direction[i] * length);
 }

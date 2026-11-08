@@ -12,6 +12,10 @@ import {
   createSceneCharacters
 } from './sceneCharacters.js';
 
+import {
+  createSceneAnimation
+} from './sceneAnimation.js';
+
 async function main() {
   const canvas = document.querySelector('#scene');
 
@@ -27,8 +31,13 @@ async function main() {
 
   const renderer = createDekuRenderer(gl);
   const environment = createForest();
-  const characters = await createSceneCharacters();
 
+  const characters = await createSceneCharacters();
+  const adegan = createSceneAnimation(characters, environment);
+
+  let kameraOtomatis = true;
+
+  // Pengaturan kamera manual.
   let yaw = .12;
   let pitch = .40;
   let zoom = 1;
@@ -38,7 +47,7 @@ async function main() {
   let time = 0;
   let last;
 
-  // ==================== KONTROL MOUSE ====================
+  // ================= KONTROL MOUSE =================
 
   canvas.addEventListener('pointerdown', event => {
     drag = {
@@ -83,7 +92,7 @@ async function main() {
     event.preventDefault();
 
     zoom = Math.max(
-      .65,
+      .25,
       Math.min(
         1.6,
         zoom * Math.exp(event.deltaY * .001)
@@ -91,28 +100,44 @@ async function main() {
     );
   }, { passive: false });
 
-  // ==================== KONTROL KEYBOARD ====================
+  // =============== KONTROL KEYBOARD ===============
 
   window.addEventListener('keydown', event => {
     if (event.repeat) return;
 
+    // Space: jeda atau lanjutkan.
     if (event.code === 'Space') {
       event.preventDefault();
       paused = !paused;
     }
 
+    // C: berganti kamera otomatis dan manual.
+    if (event.code === 'KeyC') {
+      kameraOtomatis = !kameraOtomatis;
+    }
+
+    // R: ulangi adegan dari awal.
     if (event.code === 'KeyR') {
+      time = 0;
+      paused = false;
+      kameraOtomatis = true;
+
       yaw = .12;
       pitch = .40;
       zoom = 1;
     }
   });
 
-  // ==================== ANIMASI ====================
+  // ================= RENDER LOOP =================
 
   function frame(now) {
     if (last !== undefined && !paused) {
-      time += Math.min(.05, (now - last) / 1000);
+      // Waktu terus berjalan agar karakter tetap idle
+      // setelah cerita selesai.
+      time += Math.min(
+        .05,
+        (now - last) / 1000
+      );
     }
 
     last = now;
@@ -143,15 +168,15 @@ async function main() {
     const aspect = width / height;
     const fov = Math.PI / 4;
 
-    // Jarak kamera menyesuaikan layar agar pulau terlihat.
+    // Kamera manual.
     const distance = Math.max(
-      23,
-      11.5 / (Math.tan(fov / 2) * aspect)
+      54,
+      26 / (Math.tan(fov / 2) * aspect)
     ) * zoom;
 
-    const target = [0, .2, -.5];
+    let target = [0, -7, 0];
 
-    const eye = [
+    let eye = [
       target[0] +
         distance * Math.sin(yaw) * Math.cos(pitch),
 
@@ -162,10 +187,17 @@ async function main() {
         distance * Math.cos(yaw) * Math.cos(pitch)
     ];
 
+    // Kamera otomatis mengikuti jadwal adegan.
+    if (kameraOtomatis) {
+      const kamera = adegan.camera(time, aspect);
+
+      eye = kamera.eye;
+      target = kamera.target;
+    }
+
     gl.viewport(0, 0, width, height);
 
-    // Alpha 0 membuat bagian kosong canvas transparan.
-    // Gambar background di belakang canvas menjadi terlihat.
+    // Transparan agar gambar background terlihat.
     gl.clearColor(0, 0, 0, 0);
 
     gl.clear(
@@ -179,8 +211,8 @@ async function main() {
       projection: LIBS.perspective(
         fov,
         aspect,
-        .1,
-        150
+        .3,
+        420
       ),
 
       eye
@@ -189,8 +221,10 @@ async function main() {
     environment.update(time);
     environment.draw(renderer);
 
+    // Pose karakter dihitung oleh pengatur adegan.
+    adegan.update(time);
+
     for (const model of characters) {
-      model.update(time, 'idle');
       model.draw(renderer);
     }
 
@@ -201,5 +235,5 @@ async function main() {
 }
 
 main().catch(error => {
-  console.error('[Pulau Melayang]', error);
+  console.error('[Adegan Zelda]', error);
 });

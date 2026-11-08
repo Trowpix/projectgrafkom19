@@ -1,37 +1,28 @@
 import { createDekuModel } from './deku_scrub/dekuModel.js';
 import { createOctorokModel } from './octorok/octorokModel.js';
+import { createMajoraModel } from './MajoraMask/majoraModel.js';
 
 export async function createSceneCharacters() {
-  const models = [
+  return [
     createDekuModel('kiri', {
-      position: [-5.5, 0, 1.1]
+      position: [-13.5, 0, 1]
     }),
 
     createDekuModel('tengah', {
-      position: [-3.1, 0, 1.4]
+      position: [-11, 0, 1.4]
     }),
 
     createDekuModel('kanan', {
-      position: [-.8, 0, 1.1]
+      position: [-8.5, 0, 1]
     }),
 
+    // Posisi awal Octorok berada di sungai.
     createOctorokModel({
-      position: [3.0, 0, 1.3]
+      position: [7, 0, 1.2]
+    }),
+
+    createMajoraModel({
+      position: [-11, 4, 12]
     })
   ];
-
-  // Sambungan Majora belum diaktifkan.
-  // Nama file, fungsi, dan cara pemanggilannya perlu disesuaikan
-  // dengan kode model Majora yang kamu punya.
-  //
-  // const { createMajoraModel } =
-  //   await import('./majora_mask/majoraModel.js');
-  //
-  // const majora = createMajoraModel({
-  //   position: [1.2, 0, -1.8]
-  // });
-  //
-  // models.push(majora);
-
-  return models;
 }
