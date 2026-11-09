@@ -15,5 +15,5 @@ export {
 
 export { generateMajora_Eyes } from './majora_eyes.js';
 export { generateMajora_Spikes } from './majora_spikes.js';
-export { generateMajora_FacePatterns } from './majora_pattern.js';
+export { generateMajora_FacePatterns, generateMajora_AxisLine } from './majora_pattern.js';
 export { aimRotation } from './majora_quadric.js';

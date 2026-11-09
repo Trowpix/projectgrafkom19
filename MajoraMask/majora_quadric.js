@@ -1,6 +1,6 @@
 // Rumus kuadrik dari tabel materi. Sumbu utama setiap kuadrik adalah z.
 // Normal dihitung dari gradien persamaan implisit, jadi tidak ada garis sambungan.
-function surface(rows, cols, [vMin, vMax], point, paint) {
+export function surface(rows, cols, [vMin, vMax], point, paint) {
   const vertices = [], normals = [], colors = [], indices = [];
 
   for (let i = 0; i <= rows; i++) {

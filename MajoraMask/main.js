@@ -18,6 +18,19 @@ async function main() {
   let spinX = 0, spinY = 0;
   let drag = null, paused = false, time = 0, last;
   let lost = false;
+  let split = false;
+
+  const splitButton = document.querySelector('#split');
+
+  // Tombol tidak mengambil fokus klik, agar Spasi tetap menjeda animasi.
+  splitButton.addEventListener('mousedown', e => e.preventDefault());
+
+  splitButton.addEventListener('click', () => {
+    split = !split;
+    character.setSplit(split);
+    splitButton.textContent = split ? 'Gabungkan' : 'Pisahkan';
+    splitButton.setAttribute('aria-pressed', String(split));
+  });
 
   const turn = () => {
     yaw -= spinX;
@@ -54,7 +67,7 @@ async function main() {
     distance = Math.max(3, Math.min(14, distance + e.deltaY * .005));
   }, { passive: false });
 
-  // WASD memutar kamera; Spasi untuk animasi; R untuk reset kamera.
+  // WASD memutar kamera; Spasi untuk animasi; R untuk reset kamera; E untuk garis sumbu.
   window.addEventListener('keydown', e => {
     if (e.code === 'KeyW') spinY -= keySpeed;
     if (e.code === 'KeyS') spinY += keySpeed;
@@ -67,6 +80,8 @@ async function main() {
       e.preventDefault();
       paused = !paused;
     }
+
+    if (e.code === 'KeyE') character.toggleAxisLine();
 
     if (e.code === 'KeyR') {
       yaw = 0;
@@ -110,10 +125,13 @@ async function main() {
     const aspect = w / h;
     const fov = 2 * Math.atan(2 * Math.tan(Math.PI / 9) / aspect);
     const target = [0, 0, 0];
+
+    // Kamera mundur saat terpisah agar tanduk tidak terpotong di atas.
+    const reach = distance * (split ? 1.3 : 1);
     const eye = [
-      distance * Math.sin(yaw) * Math.cos(pitch),
-      distance * Math.sin(pitch),
-      distance * Math.cos(yaw) * Math.cos(pitch)
+      reach * Math.sin(yaw) * Math.cos(pitch),
+      reach * Math.sin(pitch),
+      reach * Math.cos(yaw) * Math.cos(pitch)
     ];
 
     gl.viewport(0, 0, w, h);

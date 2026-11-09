@@ -117,7 +117,11 @@ export function createMajoraRenderer(gl) {
       gl.uniformMatrix3fv(u.Normal, false, LIBS.normalMatrix(LIBS.multiply(currentView, world)));
       gl.uniform1f(u.Gloss, material.gloss ?? .28);
       gl.uniform1f(u.Emission, material.emission ?? 0);
+
+      // Overlay digambar di atas objek lain, tanpa uji kedalaman.
+      if (material.overlay) gl.disable(gl.DEPTH_TEST);
       gl.drawElements(gl.TRIANGLES, b.count, gl.UNSIGNED_SHORT, 0);
+      if (material.overlay) gl.enable(gl.DEPTH_TEST);
     },
 
     dispose() {

@@ -18,10 +18,28 @@
       height: 100dvh;
       touch-action: none;
     }
+
+    #split {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      padding: 8px 16px;
+      border: 1px solid #8a6fb0;
+      border-radius: 6px;
+      background: #2a1d3d;
+      color: #f4eefc;
+      font: 14px system-ui, sans-serif;
+      cursor: pointer;
+    }
+
+    #split:hover {
+      background: #3b2a55;
+    }
   </style>
 </head>
 <body>
   <canvas id="majora" aria-label="Model Majora's Mask"></canvas>
+  <button id="split" type="button" aria-pressed="false">Pisahkan</button>
   <script type="module" src="./main.js"></script>
 </body>
 </html>

@@ -1,6 +1,9 @@
 import { MyObject } from './myObject.js';
 import * as Parts from './majoraParts.js';
 
+// Jarak pisah: lobus menjauhi wajah, duri menjauhi lobus searah arahnya.
+const lobeGap = 1.5, spikeGap = .8;
+
 function node(parent, name, position = [0, 0, 0], mesh = null, material = {}) {
   const child = parent.add(new MyObject(name, mesh, material));
   child.position = position;
@@ -21,12 +24,23 @@ export function createMajoraModel({ position = [0, 0, 0] } = {}) {
   // Anak topeng memakai koordinat relatif terhadap pusat wajah.
   const offset = ([x, y, z]) => [x, y - Parts.facePlacement[1], z];
 
+  // Pivot kosong untuk jarak pisah, agar tidak bentrok dengan animasi komponen.
+  const gaps = [];
+  const gapPivot = (parent, name, gap) => {
+    const pivot = node(parent, 'celah-' + name);
+    pivot.gap = gap;
+    gaps.push(pivot);
+    return pivot;
+  };
+
   for (const side of [-1, 1]) {
-    node(mask, 'lobus-' + side, offset(Parts.lobePlacement(side)), lobeMesh, body);
+    const pivot = gapPivot(mask, 'lobus-' + side, [side * lobeGap, 0, 0]);
+    node(pivot, 'lobus-' + side, offset(Parts.lobePlacement(side)), lobeMesh, body);
   }
 
   const chin = node(
-    mask, 'dagu', offset(Parts.chinPlacement.position), Parts.generateMajora_Chin(), body
+    gapPivot(mask, 'dagu', [0, -1, 0]),
+    'dagu', offset(Parts.chinPlacement.position), Parts.generateMajora_Chin(), body
   );
   chin.rotation = Parts.chinPlacement.rotation;
 
@@ -39,12 +53,18 @@ export function createMajoraModel({ position = [0, 0, 0] } = {}) {
 
   for (const side of [-1, 1]) {
     const x = side * .74, y = .28;
-    const pivot = node(mask, 'pivot-mata-' + side, offset([x, y, Parts.maskFront(x, y) + .14]));
+    const pivot = node(
+      gapPivot(mask, 'mata-' + side, [0, 0, .6]),
+      'pivot-mata-' + side, offset([x, y, Parts.maskFront(x, y) + .14])
+    );
     pivot.rotation[1] = side * .20;
 
     rims.push(node(pivot, 'bingkai', [0, 0, 0], rimMesh, { gloss: .45 }));
-    node(pivot, 'bayangan', [0, 0, .02], shadowMesh);
-    eyes.push(node(pivot, 'bola-mata', [0, 0, -.10], eyeMesh, { gloss: .9, emission: .18 }));
+    node(gapPivot(pivot, 'bayangan', [0, 0, .3]), 'bayangan', [0, 0, .02], shadowMesh);
+    eyes.push(node(
+      gapPivot(pivot, 'bola-mata', [0, 0, .95]),
+      'bola-mata', [0, 0, -.10], eyeMesh, { gloss: .9, emission: .18 }
+    ));
   }
 
   // Sumbu z cone mengarah dari ujung duri ke pangkalnya.
@@ -55,8 +75,12 @@ export function createMajoraModel({ position = [0, 0, 0] } = {}) {
 
     for (const side of [-1, 1]) {
       const dx = side * Math.cos(a) * length, dy = Math.sin(a) * length;
+      const gap = [
+        side * (lobeGap + Math.cos(a) * spikeGap), Math.sin(a) * spikeGap, 0
+      ];
       const spike = node(
-        mask, name + '-' + side, offset([side * base[0] + dx, base[1] + dy, 0]), mesh, { gloss: .55 }
+        gapPivot(mask, name + '-' + side, gap),
+        name + '-' + side, offset([side * base[0] + dx, base[1] + dy, 0]), mesh, { gloss: .55 }
       );
 
       spike.rotation = Parts.aimRotation([-dx, -dy, 0]);
@@ -69,10 +93,28 @@ export function createMajoraModel({ position = [0, 0, 0] } = {}) {
   }
 
   const patterns = Parts.generateMajora_FacePatterns().map(({ name, mesh, position, rotation, scale }) => {
-    const pattern = node(mask, name, offset(position), mesh, { gloss: .35 });
+    const gap = [position[0] * .25, position[1] * .25, .55];
+    const pattern = node(gapPivot(mask, name, gap), name, offset(position), mesh, { gloss: .35 });
     pattern.rotation = rotation;
     pattern.scale = scale;
     return pattern;
+  });
+
+  // Garis bantu: saudara wajah, jadi tidak ikut berayun.
+  // Hijau untuk sumbu X, Y, Z; putih untuk sumbu rotasi sembarang, digambar terakhir.
+  const greenLine = Parts.generateMajora_AxisLine([.2, .95, .35]);
+  const whiteLine = Parts.generateMajora_AxisLine([1, 1, 1]);
+
+  const axisLines = [
+    ['garis-x', [1, 0, 0], greenLine],
+    ['garis-y', [0, 1, 0], greenLine],
+    ['garis-z', [0, 0, 1], greenLine],
+    ['garis-sumbu', wobbleAxis, whiteLine]
+  ].map(([name, direction, lineMesh]) => {
+    const line = node(rig, name, [...Parts.facePlacement], null, { emission: 1, overlay: true });
+    line.rotation = Parts.aimRotation(direction);
+    line.lineMesh = lineMesh;
+    return line;
   });
 
   const joints = { rig, mask, eyes, rims, spikes, patterns };
@@ -82,6 +124,13 @@ export function createMajoraModel({ position = [0, 0, 0] } = {}) {
     joints,
     update(time, mode = 'idle') {
       poseMajora(joints, time, mode);
+    },
+    setSplit(on) {
+      gaps.forEach(pivot => { pivot.position = on ? [...pivot.gap] : [0, 0, 0]; });
+    },
+    toggleAxisLine() {
+      const show = !axisLines[0].mesh;
+      axisLines.forEach(line => { line.mesh = show ? line.lineMesh : null; });
     },
     draw(renderer, parentMatrix) {
       root.draw(renderer, parentMatrix);
@@ -93,6 +142,7 @@ export function createMajoraModel({ position = [0, 0, 0] } = {}) {
 const idleTime = 5, riseTime = .4, spinTime = 1.5, fallTime = .6;
 const trickTime = riseTime + spinTime + fallTime;
 const jumpHeight = .6, spinTurns = 3;
+const wobbleAxis = [1, .7, .4], wobbleAngle = .22, wobbleSpeed = 1.6;
 
 const clamp = k => Math.min(1, Math.max(0, k));
 const easeOut = k => 1 - (1 - clamp(k)) ** 3;
@@ -113,6 +163,10 @@ function heartbeat(t) {
 }
 
 function poseMajora(j, t, mode) {
+  // Rotasi sumbu sembarang: wajah dan semua anaknya bergoyang pada sumbu miring.
+  j.mask.axis = wobbleAxis;
+  j.mask.angle = mode === 'rest' ? 0 : wobbleAngle * Math.sin(t * wobbleSpeed);
+
   if (mode === 'rest') {
     j.rig.position[1] = j.rig.rotation[1] = j.rig.rotation[2] = 0;
     j.rig.scale = [1, 1, 1];
