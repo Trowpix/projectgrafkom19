@@ -81,12 +81,12 @@ function bezierLine(line, mirror) {
   };
 }
 
-// Garis tipis sepanjang sumbu z lokal, penanda sumbu.
-export function generateMajora_AxisLine(color, halfLength = 4.5, radius = .02) {
+// Garis putih tipis sepanjang sumbu z lokal, penanda sumbu rotasi.
+export function generateMajora_AxisLine(halfLength = 4.5, radius = .02) {
   return surface(1, 16, [-1, 1], (u, v) => ({
     p: [radius * Math.cos(u), radius * Math.sin(u), halfLength * v],
     n: [Math.cos(u), Math.sin(u), 0]
-  }), () => color);
+  }), () => [1, 1, 1]);
 }
 
 export function generateMajora_FacePatterns() {
