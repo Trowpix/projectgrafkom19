@@ -61,10 +61,15 @@ export function createMajoraModel({ position = [0, 0, 0] } = {}) {
 
     rims.push(node(pivot, 'bingkai', [0, 0, 0], rimMesh, { gloss: .45 }));
     node(gapPivot(pivot, 'bayangan', [0, 0, .3]), 'bayangan', [0, 0, .02], shadowMesh);
-    eyes.push(node(
+    const eye = node(
       gapPivot(pivot, 'bola-mata', [0, 0, .95]),
       'bola-mata', [0, 0, -.10], eyeMesh, { gloss: .9, emission: .18 }
-    ));
+    );
+
+    // Sumbu putar dicerminkan agar kedua mata berputar simetris.
+    eye.axis = [side * .6, .5, 1];
+    eye.spinDirection = side;
+    eyes.push(eye);
   }
 
   // Sumbu z cone mengarah dari ujung duri ke pangkalnya.
@@ -143,6 +148,7 @@ const idleTime = 5, riseTime = .4, spinTime = 1.5, fallTime = .6;
 const trickTime = riseTime + spinTime + fallTime;
 const jumpHeight = .6, spinTurns = 3;
 const wobbleAxis = [1, .7, .4], wobbleAngle = .22, wobbleSpeed = 1.6;
+const eyeSpinSpeed = 2.4;
 
 const clamp = k => Math.min(1, Math.max(0, k));
 const easeOut = k => 1 - (1 - clamp(k)) ** 3;
@@ -166,6 +172,11 @@ function poseMajora(j, t, mode) {
   // Rotasi sumbu sembarang: wajah dan semua anaknya bergoyang pada sumbu miring.
   j.mask.axis = wobbleAxis;
   j.mask.angle = mode === 'rest' ? 0 : wobbleAngle * Math.sin(t * wobbleSpeed);
+
+  // Rotasi sumbu sembarang: tiap bola mata berputar di tempat pada sumbu miringnya.
+  j.eyes.forEach(eye => {
+    eye.angle = mode === 'rest' ? 0 : eye.spinDirection * eyeSpinSpeed * t;
+  });
 
   if (mode === 'rest') {
     j.rig.position[1] = j.rig.rotation[1] = j.rig.rotation[2] = 0;
